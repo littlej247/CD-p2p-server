@@ -11,7 +11,7 @@ global.CD = {
             const app = express();
             const expressServer = app.listen(9001);
 
-            app.use(express.static('connBroker/public') );
+            app.use(express.static('public') );
 
 
             CD.sockets = new setupSockets(expressServer);
@@ -25,21 +25,17 @@ global.CD = {
         this.io = require('socket.io')(expressServer);
 
         
-
         const controllerDataNsp = this.io.of('/controllerData');
         ((io)=>{
             global.nsp = io;  //for interacting with the namespace from consel.
 
             const m = require('socket.io-p2p-server');
             
-            const p2pserver = m.Server;
-            const p2pclients = m.clients
-            //io.use(p2pserver);
+            global.p2pserver = m.Server;
+            global.p2pclients = m.clients
 
-            var rooms = [];
-            var clients = {};
-            global.rooms = rooms;
-            global.clients = clients;
+            global.rooms = [];
+            global.clients = {};
 
             console.log('rooms at setup: ', + io.adapter.rooms.size);
 
@@ -50,6 +46,10 @@ global.CD = {
                    console.log(value)
                 }
                 
+                socket.to('some room').on('message',(data)=>{console.log(data);});
+
+
+
 
                 clients[socket.id] = socket
                 var room = findOrCreateRoom()
@@ -64,10 +64,8 @@ global.CD = {
                     console.log("Error %s", err);
                 })
 
-                //p2pserver(socket, null, room);        // <- this is how it should work per the documention
-                //p2pserver(socket.to(room.name), null, room); //<-- This doesn't work..
-                p2pserver(socket.to(room.name));    // <-- This works but doesn't use the room
-                //p2pserver(socket, null, room); //<-- This doesn't work..
+                p2pserver(socket, null, room);
+                
 
                 socket.on('disconnect', function () {
                     room.players.splice(room.players.indexOf(socket), 1)
@@ -102,7 +100,7 @@ global.CD = {
                     console.log(io.adapter.rooms);
 
                 if (room.playerCount === 1) {
-                    console.log("Waiting player");
+                    console.log("Waiting for someone to join..");
                     socket.emit('message','waiting for someone to join..')
                 } else {
                     //sending to all clients in the room INCLUDING the sender..

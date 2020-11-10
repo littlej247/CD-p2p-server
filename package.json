@@ -1,5 +1,5 @@
 {
-    "name": "broakerOne",
+    "name": "CD-p2p-server",
     "version": "1.0.0",
     "description": "cSecure p2p connection broaker",
     "author": {
@@ -9,12 +9,16 @@
     "main": "app.js",
     "scripts": {
         "start": "node app.js",
-        "debug": "sudo node --inspect=127.0.0.1:9222 app.js"
+        "test": "node --inspect=127.0.0.1:9222 app.js"
     },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/littlej247/CD-p2p-server"
+    },
+    "license": "MIT",
     "dependencies": {
         "express": "~4.17.1",
         "socket.io": "~3.0.1",
         "socket.io-p2p-server": "littlej247/socket.io-p2p-server#master"
-    },
-    "man": "./broakerOne.1"
+    }
 }

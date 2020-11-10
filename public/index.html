@@ -4,15 +4,16 @@
    <title>cSecure</title>
 </head>
 <body>
- <div>
+ 
     <label>Initieator option</label><input id='init' type="checkbox"/><br>
     <label>Offer id if initiator</label><input id='token' /><br>
     <input type="button" id ='startScript' onclick="startScript();" value="Start script"/><br>
+<div style="display:none">
     <input id='message' /><input type="button" id="sendMessage" value="Send message"/><br>
-</div>
+
 <p>
     <input type="button" id ='upgrade' value="Upgrade"/><br>
-
+</div>
 
 <script src="https://ide.cumberlandapartments.ca/js/socket.io.min.js"></script>
 <!--  <script src="https://ide.cumberlandapartments.ca/js/peerjs.min.js"></script>  -->
@@ -22,18 +23,18 @@
 var msgBox = document.getElementById('message');
 msgBox.value = getRandomTitle();
 
-
+    
 
 function startScript(){
 
     var manager = new io.Manager({ transports: ['websocket'] });
     var Opts = {
         peerOpts: {
-            trickle:    true //,
-            //initiator:  document.getElementById('init').checked
+            trickle:    true
         },
         autoUpgrade: false
     }
+
     var socket = manager.socket('/controllerData');
     //var socket = new io('/controllerData');
     window.p2psocket = new P2P(socket, Opts, ()=>{
@@ -47,6 +48,9 @@ function startScript(){
     })
 
 
+    p2psocket.on('connection', (socket)=>{
+        console.log("socket connection established", socket.id);
+    })
 
 
     p2psocket.on('ready', function () {
@@ -75,8 +79,8 @@ function startScript(){
 
 
 
-
-
+    document.getElementById('startScript').style.display="none";
+    document.querySelector('div').style.display="unset";
 
 }
 
