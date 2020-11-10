@@ -69,13 +69,13 @@ function startScript(){
         textArea.value = "peer => " + data+"\n" + textArea.value;
     })
 
-
+    //this doesn't work for somereason. not sure what the deal is..
     socket.on('connection', (socket)=>{
         console.log("socket connection established", socket.id);
     })
 
     p2psocket.on('upgrade', function (data) {
-        console.log('connection is now p2p Socket');
+        console.log('connection upgraded from long pulling to socket');
     })
 
     document.getElementById('sendMessage').onclick = ()=>{
@@ -83,6 +83,12 @@ function startScript(){
         textArea.value = "me   => " + msgBox.value+"\n" + textArea.value;
         msgBox.value = getRandomTitle();
     }
+    msgBox.onkeypress = (e)=>{ if (e.key==="Enter"){
+        p2psocket.emit('message',msgBox.value);
+        textArea.value = "me   => " + msgBox.value+"\n" + textArea.value;
+        msgBox.value = "";
+    }};
+
     
     function goPrivate(){
         p2psocket.useSockets = false;
