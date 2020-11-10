@@ -4,30 +4,36 @@
    <title>cSecure</title>
 </head>
 <body>
- 
-    <label>Initieator option</label><input id='init' type="checkbox"/><br>
-    <label>Offer id if initiator</label><input id='token' /><br>
-    <input type="button" id ='startScript' onclick="startScript();" value="Start script"/><br>
+    <label>Connection Token </label> <input id='token' style="width:300px;" /><br>
+    <input type="button" id ='startScriptBtn' value="Start script"/><br>
 <div style="display:none">
-    <input id='message' /><input type="button" id="sendMessage" value="Send message"/><br>
+    <input id='message' style="width:300px;" /> <input type="button" id="sendMessage" value="Send message"/><br>
 
-<p>
-    <input type="button" id ='upgrade' value="Upgrade"/><br>
+    <p>
+    <input type="button" id ='upgrade' value="Go Peer 2 Peer"/><br>
+    <textarea id="textarea" rows="10" cols="50"> </textarea>
 </div>
 
 <script src="https://ide.cumberlandapartments.ca/js/socket.io.min.js"></script>
-<!--  <script src="https://ide.cumberlandapartments.ca/js/peerjs.min.js"></script>  -->
 <script src="https://ide.cumberlandapartments.ca/js/socketiop2p.min.js"></script>
 <script> 
 
 var msgBox = document.getElementById('message');
 msgBox.value = getRandomTitle();
+var tokenBox = document.getElementById('token');
+var goPrivateBtn = document.getElementById('upgrade');    
+goPrivateBtn.disabled = true;
+var startBtn = document.getElementById('startScriptBtn');
+startBtn.onclick =  ()=>{startScript()};
+var textArea = document.getElementById('textarea');
 
-    
 
 function startScript(){
+    tokenBox.disabled = true;
+    startBtn.style.display="none";
+    document.querySelector('div').style.display="unset";
 
-    var manager = new io.Manager({ transports: ['websocket'] });
+    //window.manager = new io.Manager({ transports: ['websocket'] });
     var Opts = {
         peerOpts: {
             trickle:    true
@@ -35,54 +41,66 @@ function startScript(){
         autoUpgrade: false
     }
 
-    var socket = manager.socket('/controllerData');
+    //window.socket = manager.socket('/controllerData');
+    window.socket = io('/controllerData');
+    
     //var socket = new io('/controllerData');
     window.p2psocket = new P2P(socket, Opts, ()=>{
+        goPrivateBtn.disabled = false;
         console.log('We all speak WebRTC now');
     });
+    //console.log('Your user id is: ', socket.on().id);
+
+    if (tokenBox.value == ""){
+        p2psocket.emit("createRoom");
+    } else {
+        p2psocket.emit("joinRoom",tokenBox.value);
+    }
+
+    p2psocket.on('roomName', function (roomName) {
+        tokenBox.value = roomName;
+        console.log('room key is: ' + roomName);
+    })
 
 
     // this event will be triggered over the socket transport
     p2psocket.on('message', function (data) {
         console.log('message: ', data);
+        textArea.value = "peer => " + data+"\n" + textArea.value;
     })
 
 
-    p2psocket.on('connection', (socket)=>{
+    socket.on('connection', (socket)=>{
         console.log("socket connection established", socket.id);
     })
 
-
-    p2psocket.on('ready', function () {
-    p2psocket.usePeerConnection = true
-        console.log('onready called');
-    });
+    p2psocket.on('upgrade', function (data) {
+        console.log('connection is now p2p Socket');
+    })
 
     document.getElementById('sendMessage').onclick = ()=>{
         p2psocket.emit('message',msgBox.value);
+        textArea.value = "me   => " + msgBox.value+"\n" + textArea.value;
         msgBox.value = getRandomTitle();
     }
-
-    var goPrivate = document.getElementById('upgrade')
-    goPrivate.onclick = ()=>{
+    
+    function goPrivate(){
         p2psocket.useSockets = false;
-        goPrivate.disabled = true;
+        goPrivateBtn.disabled = true;
         console.log('connection should be private');
     }
-
-
-
-
-
-
-
-
-
-
-    document.getElementById('startScript').style.display="none";
-    document.querySelector('div').style.display="unset";
+    p2psocket.on('goPrivate', ()=>{
+        console.log('command received to goPrivate')
+        goPrivate();
+        
+    });
+    goPrivateBtn.onclick = ()=>{
+        p2psocket.emit('goPrivate');
+        goPrivate();
+    }
 
 }
+
 
 
     //Get a fun random title incase one isn't specified
