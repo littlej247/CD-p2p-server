@@ -23,7 +23,8 @@ global.CD = {
     function setupSockets(expressServer){
         this.io = require('socket.io')(expressServer);
         
-        const controllerDataNsp = this.io.of('/controllerData');
+        this.controllerDataNsp = this.io.of('/controllerData');
+        const controllerDataNsp = this.controllerDataNsp;
         ((io)=>{
 
             const p2p = require('socket.io-p2p-server');
@@ -34,7 +35,7 @@ global.CD = {
                 
                 function joinRoom(roomName){
                     socket.join(roomName);
-                    p2pserver(socket, null, {name:roomName});
+                    p2pserver(socket, null, roomName);
                     socket.emit('roomName', roomName);
                     
                     socket.on('message', function (data) {
@@ -46,6 +47,10 @@ global.CD = {
                     socket.on('goPrivate', function () {
                         socket.in(roomName).emit('goPrivate');
                     })
+
+                    io.in(roomName).emit('headCount',
+                        controllerDataNsp.adapter.rooms.get(roomName).size
+                    );
 
                     console.log('rooms after join function');
                     console.log(io.adapter.rooms);
@@ -75,7 +80,7 @@ global.CD = {
             })
 
 
-        })(controllerDataNsp);
+        })(this.controllerDataNsp);
         
         
 

@@ -10,12 +10,12 @@
     <input id='message' style="width:300px;" /> <input type="button" id="sendMessage" value="Send message"/><br>
 
     <p>
-    <input type="button" id ='upgrade' value="Go Peer 2 Peer"/><br>
+    <input type="button" id ='upgrade' value="Go Peer 2 Peer"/> <span id='headCount'> </span><br>
     <textarea id="textarea" rows="10" cols="50"> </textarea>
 </div>
 
-<script src="https://ide.cumberlandapartments.ca/js/socket.io.min.js"></script>
-<script src="https://ide.cumberlandapartments.ca/js/socketiop2p.min.js"></script>
+<script src="/socket.io.min.js"></script>
+<script src="/socketiop2p.min.js"></script>
 <script> 
 
 var msgBox = document.getElementById('message');
@@ -62,6 +62,11 @@ function startScript(){
         console.log('room key is: ' + roomName);
     })
 
+
+    p2psocket.on('headCount', (numClients)=>{
+        document.getElementById('headCount').innerText = " Headcount in room: " + numClients;
+        console.log(numClients);
+    })
 
     // this event will be triggered over the socket transport
     p2psocket.on('message', function (data) {
