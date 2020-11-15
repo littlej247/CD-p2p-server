@@ -16,12 +16,12 @@
 
 <script src="/socket.io.min.js"></script>
 <script src="/socketiop2p.min.js"></script>
-<script> 
+<script>
 
 var msgBox = document.getElementById('message');
 msgBox.value = getRandomTitle();
 var tokenBox = document.getElementById('token');
-var goPrivateBtn = document.getElementById('upgrade');    
+var goPrivateBtn = document.getElementById('upgrade');
 goPrivateBtn.disabled = true;
 var startBtn = document.getElementById('startScriptBtn');
 startBtn.onclick =  ()=>{startScript()};
@@ -37,12 +37,10 @@ function startScript(){
         peerOpts: {
             trickle:    false,
             config: {
-                iceServers: [
-                {   urls:     "stun:stun2.l.google.com:19302"   }
-                ,{   urls:     "turn:184.69.231.122:3478"   }
-                    //,username:   "littlej247"
-                    //,credential: "14d67398-b074-4179-b316-cfa1d2370a69"    }
-                ]
+              //  iceServers: [
+              //  {   urls:     "stun:stun2.l.google.com:19302"   }
+              //  ,{   urls:     "turn:184.69.231.122:3478"   }
+              //  ]
             }
         },
         autoUpgrade: false

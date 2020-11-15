@@ -4,9 +4,9 @@ This is my no means a finished product. Just playing around with a p2p service b
 
 ## Install
 
-1. $ git clong https://github.com/littlej247/CD-p2p-server.git
+1. $ git clone https://github.com/littlej247/CD-p2p-server.git
 
-2. $ CD CD-p2p-server
+2. $ cd CD-p2p-server
 
 3. $ npm install
 
@@ -14,11 +14,11 @@ This is my no means a finished product. Just playing around with a p2p service b
 
 1. $ npm run demo
 
-2. Navigate two tabs to http://localhost:9001. Click 'Start Script' in one and copy the UUID.
+2. Navigate two tabs to http://127.0.0.1:9001/  Click 'Start Script' in one and copy the UUID.
 
 3. Past it in the other, click 'Start Script', and then enjoy a conversation with yourself.
 
-Then when the conversation gets serious click 'upgrade' to switch the routing to P2P without interruption.
+Then when the conversation gets serious click 'Go Peer 2 Peer' to switch the routing to P2P without interruption.
 
 
 ## Other
