@@ -4,7 +4,7 @@
    <title>cSecure</title>
 </head>
 <body>
-    <label>Connection Token </label> <input id='token' style="width:300px;" /><br>
+    <label>Connection ID </label> <input id='token' style="width:300px;" /><br>
     <input type="button" id ='startScriptBtn' value="Start script"/><br>
 <div style="display:none">
     <input id='message' style="width:300px;" /> <input type="button" id="sendMessage" value="Send message"/><br>
@@ -33,23 +33,27 @@ function startScript(){
     startBtn.style.display="none";
     document.querySelector('div').style.display="unset";
 
-    //window.manager = new io.Manager({ transports: ['websocket'] });
     var Opts = {
         peerOpts: {
-            trickle:    true
+            trickle:    false,
+            config: {
+                iceServers: [
+                {   urls:     "stun:stun2.l.google.com:19302"   }
+                ,{   urls:     "turn:184.69.231.122:3478"   }
+                    //,username:   "littlej247"
+                    //,credential: "14d67398-b074-4179-b316-cfa1d2370a69"    }
+                ]
+            }
         },
         autoUpgrade: false
     }
 
-    //window.socket = manager.socket('/controllerData');
     window.socket = io('/controllerData');
     
-    //var socket = new io('/controllerData');
     window.p2psocket = new P2P(socket, Opts, ()=>{
         goPrivateBtn.disabled = false;
         console.log('We all speak WebRTC now');
     });
-    //console.log('Your user id is: ', socket.on().id);
 
     if (tokenBox.value == ""){
         p2psocket.emit("createRoom");
@@ -61,7 +65,6 @@ function startScript(){
         tokenBox.value = roomName;
         console.log('room key is: ' + roomName);
     })
-
 
     p2psocket.on('headCount', (numClients)=>{
         document.getElementById('headCount').innerText = " Headcount in room: " + numClients;
@@ -94,7 +97,6 @@ function startScript(){
         msgBox.value = "";
     }};
 
-    
     function goPrivate(){
         p2psocket.useSockets = false;
         goPrivateBtn.disabled = true;
@@ -109,24 +111,22 @@ function startScript(){
         p2psocket.emit('goPrivate');
         goPrivate();
     }
-
 }
 
+//Get a fun random title incase one isn't specified
+function getRandomTitle(){
+        var myArray = ["Whoa...","But....But....","Hold on a sec..","O Geeze..","I don't know Rick..","My man!",
+            "S-S-Samantha.","Puh rum pum pow!","dont mind those stare goblins","Oh, wow.","Awww, it's you guys!",
+            "Wubbalubbadubdub!","Uh ohhhh! Somersoult jump!","GRASSSSS... tastes bad!","No jumping in the sewer.",
+            "BURGERTIME!","Rubber baby buggy bumpers!","I turned myself into a PICKLE!","Heavens to Murgatroyd!",
+            "Hey hey hey!","You blockhead!","That's all I can stands, I can't stands no more!","Beep Beep",
+            "And now, here's something we hope you'll really like.","Excellent.","Wonder Twin powers activate!",
+            "Scooby-Dooby-Doo!","Sufferin' succotash!","Ay, caramba!","By the power of Greyskull!","Good grief.","D'oh!",
+            "What's up, doc?","Giggity","Mmmkay","Lambs to the cosmic slaughter!","Keep Summer... safe!"
+        ];
+        return (myArray[Math.floor(Math.random()*myArray.length)]);
+}
 
-
-    //Get a fun random title incase one isn't specified
-    function getRandomTitle(){
-          var myArray = ["Whoa...","But....But....","Hold on a sec..","O Geeze..","I don't know Rick..","My man!",
-             "S-S-Samantha.","Puh rum pum pow!","dont mind those stare goblins","Oh, wow.","Awww, it's you guys!",
-             "Wubbalubbadubdub!","Uh ohhhh! Somersoult jump!","GRASSSSS... tastes bad!","No jumping in the sewer.",
-             "BURGERTIME!","Rubber baby buggy bumpers!","I turned myself into a PICKLE!","Heavens to Murgatroyd!",
-             "Hey hey hey!","You blockhead!","That's all I can stands, I can't stands no more!","Beep Beep",
-             "And now, here's something we hope you'll really like.","Excellent.","Wonder Twin powers activate!",
-             "Scooby-Dooby-Doo!","Sufferin' succotash!","Ay, caramba!","By the power of Greyskull!","Good grief.","D'oh!",
-             "What's up, doc?","Giggity","Mmmkay","Lambs to the cosmic slaughter!","Keep Summer... safe!"
-          ];
-          return (myArray[Math.floor(Math.random()*myArray.length)]);
-    }
 </script>
 </body>
 </html>
