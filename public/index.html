@@ -2,36 +2,106 @@
 <html>
 <head>
    <title>cSecure</title>
+   <style>
+    div {
+        border-style: solid;
+        width: fit-content;
+        padding: 8px;
+        margin-bottom: 16px;
+    }
+    </style>
 </head>
 <body>
-    <label>Connection ID </label> <input id='token' style="width:300px;" /><br>
-    <input type="button" id ='startScriptBtn' value="Start script"/><br>
-<div style="display:none">
-    <input id='message' style="width:300px;" /> <input type="button" id="sendMessage" value="Send message"/><br>
+    <div>
+        <h3>API's</h3>
+        <table>
+            <tr><td>
+                <label>API Key</label>
+            </td><td>
+                <input id='api_key' style="width:300px;" value="4b9996cf-078c-47e9-889c-c8f0a4b12b4e"/>
+            </td>
+        </table>
+        <b>connRequest</b> type: PUSH  data: JSON<br>
+        <table>
+            <tr><td>
+                <label>uuid</label>
+            </td><td>
+                <input id='uuid' style="width:300px;" />
+            </td></tr>
+            <tr><td>
+                <label>controller_id</label>
+            </td><td>
+                <input id='controller_id' style="width:300px;" value="1"/><br>
+            </td></tr>
+            <tr><td>
+                <label>people_id</label>
+            </td><td>
+                <input id='people_id' style="width:300px;" value="1"/><br>
+            </td></tr>
+            <tr><td>
+                <input type="button" id ='connReqApi' value="Send"/>
+            </td><td id="connRequestResponse" style="font-weight: bolder; color: darkgreen;float: right;">
+            </td></tr>
+        </table>
 
-    <p>
-    <input type="button" id ='upgrade' value="Go Peer 2 Peer"/> <span id='headCount'> </span><br>
-    <textarea id="textarea" rows="10" cols="50"> </textarea>
-</div>
+        </p>
+    </div>
+    
+    
+    <div>
+        <input type="button" id ='startScriptBtn' value="Connect"/>
+        <span id='connectStatus' style="font-weight: bolder; color: darkgreen;"></span><br>
+
+        <input id='message' style="width:300px;" /> <input type="button" id="sendMessage" value="Send message"/><br>
+
+        <p>
+        <input type="button" id ='upgrade' value="Go Peer 2 Peer"/> <span id='headCount' style="float: right;"> </span><br>
+        <textarea id="textarea" rows="10" cols="50"> </textarea>
+    </div>
 
 <script src="/socket.io.min.js"></script>
 <script src="/socketiop2p.min.js"></script>
 <script>
 
+var uuidBox = document.getElementById('uuid');
+uuidBox.value = create_UUID();
+document.getElementById('connReqApi').onclick = ()=>{ postConnReq() };
+function postConnReq(){
+    fetch('https://ide.cumberlandapartments.ca:9000/api/connRequest',    {
+        method: 'POST',
+        headers: {
+            'X-API-KEY': document.getElementById('api_key').value,
+            'Content-Type': 'application/json'    },
+        body: JSON.stringify({
+            controller_id:  document.getElementById('controller_id').value, 
+            people_id:      document.getElementById('people_id').value,
+            uuid:           document.getElementById('uuid').value})
+    }).then((response) => {
+        console.log('response: ',response);
+        document.getElementById('connRequestResponse').innerText = "Status: " + response.status;
+        return response.text();
+    }).then((data) => {
+        console.log('response body: ', data);
+    });
+}
+
+
+
+var conStatus = document.getElementById('connectStatus');
 var msgBox = document.getElementById('message');
 msgBox.value = getRandomTitle();
-var tokenBox = document.getElementById('token');
 var goPrivateBtn = document.getElementById('upgrade');
 goPrivateBtn.disabled = true;
 var startBtn = document.getElementById('startScriptBtn');
-startBtn.onclick =  ()=>{startScript()};
+startBtn.onclick = startScript;
 var textArea = document.getElementById('textarea');
 
 
 function startScript(){
-    tokenBox.disabled = true;
+    
     startBtn.style.display="none";
-    document.querySelector('div').style.display="unset";
+    conStatus.innerText = "connecting...";
+    //document.querySelector('div').style.display="unset";
 
     var Opts = {
         peerOpts: {
@@ -46,67 +116,74 @@ function startScript(){
         autoUpgrade: false
     }
 
-    window.socket = io('/controllerData');
+    window.socket = io('/p2pClients');
     
-    window.p2psocket = new P2P(socket, Opts, ()=>{
+    window.p2p = new P2P(socket, Opts, ()=>{
         goPrivateBtn.disabled = false;
         console.log('We all speak WebRTC now');
+        conStatus.innerText = "connected, P2P";
+    });
+    p2p.CD = {};
+    p2p.on('id_request',()=>{
+        p2p.emit('client_id',{
+            controller_id:  document.getElementById('controller_id').value, 
+            people_id:      document.getElementById('people_id').value,
+            uuid:           document.getElementById('uuid').value
+        })
     });
 
-    if (tokenBox.value == ""){
-        p2psocket.emit("createRoom");
-    } else {
-        p2psocket.emit("joinRoom",tokenBox.value);
-    }
 
-    p2psocket.on('roomName', function (roomName) {
-        tokenBox.value = roomName;
-        console.log('room key is: ' + roomName);
-    })
-
-    p2psocket.on('headCount', (numClients)=>{
+    p2p.on('headCount', (numClients)=>{
+        p2p.CD.headCount = numClients;
         document.getElementById('headCount').innerText = " Headcount in room: " + numClients;
         console.log(numClients);
     })
 
     // this event will be triggered over the socket transport
-    p2psocket.on('message', function (data) {
+    p2p.on('message', function (data) {
         console.log('message: ', data);
         textArea.value = "peer => " + data+"\n" + textArea.value;
     })
 
     //this doesn't work for somereason. not sure what the deal is..
-    socket.on('connection', (socket)=>{
+    p2p.socket.on('connect',()=>{
+        conStatus.innerText = "connected";
         console.log("socket connection established", socket.id);
     })
 
-    p2psocket.on('upgrade', function (data) {
+    p2p.on('upgrade', function (data) {
+        conStatus.innerText = "connected & upgraded";
         console.log('connection upgraded from long pulling to socket');
     })
 
+    p2p.on('disconnect', function (data) {
+        conStatus.innerText = "disconnected..";
+        console.log('socket disconnected...');
+    })
+
     document.getElementById('sendMessage').onclick = ()=>{
-        p2psocket.emit('message',msgBox.value);
+        p2p.emit('message',msgBox.value);
         textArea.value = "me   => " + msgBox.value+"\n" + textArea.value;
         msgBox.value = getRandomTitle();
     }
     msgBox.onkeypress = (e)=>{ if (e.key==="Enter"){
-        p2psocket.emit('message',msgBox.value);
+        p2p.emit('message',msgBox.value);
         textArea.value = "me   => " + msgBox.value+"\n" + textArea.value;
         msgBox.value = "";
     }};
 
     function goPrivate(){
-        p2psocket.useSockets = false;
+        p2p.useSockets = false;
         goPrivateBtn.disabled = true;
         console.log('connection should be private');
     }
-    p2psocket.on('goPrivate', ()=>{
+    p2p.on('goPrivate', ()=>{
         console.log('command received to goPrivate')
         goPrivate();
         
     });
     goPrivateBtn.onclick = ()=>{
-        p2psocket.emit('goPrivate');
+        p2p.emit('goPrivate');
         goPrivate();
     }
 }
@@ -124,6 +201,17 @@ function getRandomTitle(){
         ];
         return (myArray[Math.floor(Math.random()*myArray.length)]);
 }
+
+function create_UUID(){
+    var dt = new Date().getTime();
+    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = (dt + Math.random()*16)%16 | 0;
+        dt = Math.floor(dt/16);
+        return (c=='x' ? r :(r&0x3|0x8)).toString(16);
+    });
+    return uuid;
+}
+
 
 </script>
 </body>

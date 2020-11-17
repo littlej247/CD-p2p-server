@@ -10,7 +10,7 @@
     "scripts": {
         "start": "node app.js",
         "demo": "node app.js demo",
-        "test": "DEBUG=p2pserver node --inspect=127.0.0.1:9222 app.js demo"
+        "debug": "DEBUG=p2pserver,CD* node --inspect=127.0.0.1:9222 app.js demo"
     },
     "repository": {
         "type": "git",
@@ -18,6 +18,8 @@
     },
     "license": "MIT",
     "dependencies": {
+        "body-parser": "^1.19.0",
+        "cors": "^2.8.5",
         "express": "~4.17.1",
         "node-turn": "0.0.6",
         "socket.io": "~3.0.1",

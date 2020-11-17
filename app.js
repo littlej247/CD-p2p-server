@@ -1,44 +1,53 @@
+// app.js
+// ======
 'use strict';
+var debug = require('debug')('CD.app');
 console.log("Starting connBroker app.js");
 
 //Controller app script.
-global.CD = {
-    app: {
-        init: ()=>{
-            //Construct the app..
-            
-            //check for demo flag
-            if (process.argv[2] === 'demo'){
-                CD.app.config.demo = true;
-                console.log('running http demo mode');
-            }
+global.CD = {};
 
-            //Start stuff.
-            const express = require('express');
-            const app = express();
-            const expressServer = app.listen(9001);
+CD.app = new function (){
+    //Construct the app..
 
-            //If demo flag, share public folder at root
-            if (CD.app.config.demo === true){
-                app.use(express.static('public') );
-            } else {
-                app.get('/', function (req, res) {
-                    res.send('CD-p2p-server');
-                })
-            }
-            
-            //setupTurnServer();
-            CD.sockets = new setupSockets(expressServer);
-            
-        },
-        config:{
-            demo: false
-        }
+    var self = this;
+    //default settings
+    self.config = {
+        demo: false,
+        port: 9001
     }
+
+    //check for demo flag
+    if (process.argv[2] === 'demo'){
+        self.config.demo = true;
+        console.log('running http demo mode');
+        console.log('Visit http://127.0.0.1:'+self.config.port+'/');
+    }
+
+    //Start stuff.
+    self.express = require('express');
+    self.app = self.express();
+    self.expressServer = self.app.listen(self.config.port);
+    
+    console.log('listening on port '+self.config.port);
+
+    //If demo flag, share public folder at root
+    if (self.config.demo === true){
+        self.app.use(self.express.static('public') );
+    } else {
+        self.app.get('/', function (req, res) {
+            res.send('CD-p2p-server');
+        })
+    }
+    
+    //CD.io = new setupSockets(expressServer);
+    require('./src/api.js')(self.app, CD); //this is ahead because it include api key check for sockets
+    const CD_io = require('./src/sockets.js');
+    CD.io = new CD_io(self.expressServer); //this is ahead because it include api key check for sockets    
 }
 
-
-function setupTurnServer(){
+CD.turn = new function (){
+    return;
     var Turn = require('node-turn');
     var server = new Turn({
     // set options
@@ -54,79 +63,14 @@ function setupTurnServer(){
     server.start();
 }
 
-
-function setupSockets(expressServer){
-    this.io = require('socket.io')(expressServer);
-    
-    this.controllerDataNsp = this.io.of('/controllerData');
-    const controllerDataNsp = this.controllerDataNsp;
-    ((io)=>{
-
-        const p2p = require('socket.io-p2p-server');
-        global.p2pserver = p2p.Server;
-        global.p2pclients = p2p.clients;
-
-        io.on('connection', (socket)=>{
-            
-            function joinRoom(roomName){
-                socket.join(roomName);
-                p2pserver(socket, null, roomName);
-                socket.emit('roomName', roomName);
-                
-                socket.on('message', function (data) {
-                    socket.in(roomName).emit('message', data);
-                    console.log('message from room: ', roomName);
-                    console.log('message: ', data);
-                });
-
-                socket.on('goPrivate', function () {
-                    socket.in(roomName).emit('goPrivate');
-                })
-
-                io.in(roomName).emit('headCount',
-                    controllerDataNsp.adapter.rooms.get(roomName).size
-                );
-
-                console.log('rooms after join function');
-                console.log(io.adapter.rooms);
-            }
-
-            socket.on("joinRoom",(roomName)=>{
-                joinRoom(roomName);
-            });
-            
-            socket.on('createRoom',()=>{
-                const roomName = create_UUID();
-                joinRoom(roomName);
-            })
-
-            socket.on('error', function (err) {
-                console.log("Error %s", err);
-            })
-
-            socket.on('disconnect', ()=>{
-                console.log('client disconnected..');
-                console.log('rooms after disconnect');
-                console.log(io.adapter.rooms);
-            })
-
-            console.log('rooms after connect');
-            console.log(io.adapter.rooms);
-        })
-
-
-    })(this.controllerDataNsp);
+CD.tools = {
+    create_UUID: ()=>{
+        var dt = new Date().getTime();
+        var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+            var r = (dt + Math.random()*16)%16 | 0;
+            dt = Math.floor(dt/16);
+            return (c=='x' ? r :(r&0x3|0x8)).toString(16);
+        });
+        return uuid;
+    }
 }
-
-//Will look into replacing this with a UUID library later
-function create_UUID(){
-    var dt = new Date().getTime();
-    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = (dt + Math.random()*16)%16 | 0;
-        dt = Math.floor(dt/16);
-        return (c=='x' ? r :(r&0x3|0x8)).toString(16);
-    });
-    return uuid;
-}
-
-CD.app.init();
