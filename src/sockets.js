@@ -29,31 +29,36 @@ module.exports = function (expressServer){
         socket.on('disconnect', ()=>{
             debug('controller disconnected..');
             debug('rooms after \n%O',self.p2pNsp.adapter.rooms);
-            console.log(self.p2pNsp.adapter.rooms);
+            //console.log(self.p2pNsp.adapter.rooms);
         })        
 
-        console.log('controllersRooms after connect. (should only ever be single rooms');
-        console.log(self.controllersNsp.adapter.rooms);
+        debug('controllersRooms after connect. (should only ever be single rooms \n%O',self.controllersNsp.adapter.rooms);
     })
     
     self.createRoom = (controller_id, people_id, roomName, cb)=>{//roomName is uuid
-        debug('incoming request to create p2p room: ',roomName);        
-        self.controllersNsp.sockets.forEach((socket)=>{
-            console.log(socket.CD);
-            if (socket.CD.controller_id === controller_id){
-                debug('found connected controller: ',controller_id);
-                debug('emitting connectionRequest for user: ',people_id);
-                self.pendingConnections[roomName]={people_id:people_id,controller_id:controller_id};
-                socket.emit('connectionRequest', roomName, people_id);
-                cb("connection request sent.");
-                return
-            } else {
-                return
-            }
-        })
-        debug('controller connection not found.');
-        cb("controller connection not found. request ignored.");
-        return;
+        debug('incoming request to create p2p room: ',roomName);
+
+        const socket = self.tools.getControllerSocket(controller_id);
+        if (socket === false){
+            
+            return
+        }
+        
+        const waiting = self.tools.isControllerWaiting(controller_id, people_id, roomName);
+        debug('waiting result', waiting);
+        if ( waiting != false){
+            debug('controller is waiting..');
+            cb(waiting);
+            return;
+        }
+            
+
+        //go ahead with new room request..
+        debug('emitting connectionRequest for user: ',people_id);
+        self.pendingConnections[roomName]={people_id:people_id,controller_id:controller_id};
+        socket.emit('connectionRequest', roomName, people_id);
+        cb("connection request sent.");
+    
     }
 
     /** p2pClients Namespace
@@ -69,9 +74,10 @@ module.exports = function (expressServer){
     self.p2pNsp.on('connection', (socket)=>{
         var debug = require('debug')('CD.io.p2pNsp.soc:'+socket.id.substring(0, 5));
         if (!socket.CD) socket.CD = {}; //Storage for this program
+
         //add a one minute timer to kill the connection if not joined/used
-        debug('emmiting id_request');
-        socket.emit('id_request on socket id ', socket.id);
+        
+        debug('emitting id_request on new connection');
 
         socket.on('client_id',id=>{
             socket.CD.uuid = id.uuid,
@@ -87,13 +93,13 @@ module.exports = function (expressServer){
 
         function joinRoom(socket){
             //make sure the uuid exists in pendingConnections
-            debug('Checking socket.CD\n%O',socket.CD);
+            //debug('Checking socket.CD\n%O',socket.CD);
             debug('Checking with pendingConnections\n%O',self.pendingConnections);
             if (self.pendingConnections[socket.CD.uuid] == undefined
              || self.pendingConnections[socket.CD.uuid].controller_id != socket.CD.controller_id
              || self.pendingConnections[socket.CD.uuid].people_id != socket.CD.people_id){
                 console.log('client attempting to connect with invalid uuid.\n rejecting request');
-                console.log('client:',socket.CD);
+                //console.log('client:',socket.CD);
                 if (!socket.CD.controller){
                     //If it's not a controller, kill the underlying connection
                     socket.disconnect(true);
@@ -103,16 +109,35 @@ module.exports = function (expressServer){
                     socket.disconnect(false);
                     console.log('CONTROLLER attempting to connect with invalid uuid.\n Closing just the p2p socket');};
                 return;
-            }
+            }            
 
-            debug('attempting to join room: %s', socket.CD.uuid);
-            //Make sure this only runs once per socket
-            debug('checking if socket has already joined.',socket.CD.joined);
-            if (socket.CD.joined===true){
-            console.error('peer can not join room more than once.. did it get multiple id_requests?');
-            return;}  socket.CD.joined=true;
-            
             const roomName  = socket.CD.uuid;
+            debug('attempting to join room: %s', roomName);
+
+            //If room exists & it's a controller, make sure there is no other controller in the room
+            
+            let clientsMap = self.p2pNsp.adapter.rooms.get(roomName);
+            console.log('look at this thing,',clientsMap);
+            if (clientsMap != undefined){
+              debug('inspecting other clients in the room.');
+              //itterate through clients in the room.
+              for (let client_id of clientsMap){ let cliSoc = self.p2pNsp.sockets.get(client_id);
+                    //for (cliSoc of self.p2pNsp.adapter.rooms.get(socket.CD.uuid)){
+
+                    if( socket.CD.controller == true && cliSoc.CD.controller == true){
+                        debug("Can't have more than one controller per room. Aborting join and disconnecting socket.");
+                        socket.disconnect();
+                        return;
+                    }
+
+                    if( cliSoc.id == socket.id){
+                        debug("Can't join room more than once.. did it get multiple id_requests?");
+                        return;
+                    }
+              }
+            }
+            
+            
 
             socket.join(roomName);
             self.p2pserver(socket, null, roomName);
@@ -121,8 +146,7 @@ module.exports = function (expressServer){
             socket.on('message', function (data) {
                 socket.in(roomName).emit('message', data);
                 debug('messaging room: %s',roomName);
-                debug('=>%s',data);
-                
+                debug('=>%s',data);                
             });
 
             socket.on('goPrivate', function () {
@@ -146,7 +170,6 @@ module.exports = function (expressServer){
         socket.on('disconnect', ()=>{
             console.log('client disconnected..');
             debug('rooms after disconnect %O', self.p2pNsp.adapter.rooms);
-            console.log(self.p2pNsp.adapter.rooms);
         })
 
         socket.emit('id_request');
@@ -155,12 +178,72 @@ module.exports = function (expressServer){
             socket.CD=id;
         })
 
-        console.log('p2p rooms after connect');
-        console.log(self.p2pNsp.adapter.rooms);
-        //console.log(p2p.clients);
-
+        debug('p2p rooms after connect %O',self.p2pNsp.adapter.rooms);
     })
     
-    
+    self.tools = {}
+
+    //Search p2pNps for a connection from the controller
+    self.tools.isControllerWaiting = (controller_id, people_id, uuid)=>{
+        //Is controller already waiting in a room for the client?
+        debug('scanning p2p clients...')
+        for ( var cliSoc of self.p2pNsp.sockets){
+            cliSoc = cliSoc[1];
+            debug('id of connection being examined:', cliSoc.id);
+            
+            if (!cliSoc.CD){ debug("connection missing CD data");
+                console.error('this should never happen. please investigate');
+                continue;
+            }
+            if (   cliSoc.CD.controller     === true
+                && cliSoc.CD.controller_id  === controller_id
+                && cliSoc.CD.people_id      === people_id)   
+            {
+                debug("connection belongs to a controler that is here for the same person.");
+                
+                if ( 
+                    cliSoc.adapter.rooms.get(uuid) != undefined                    ){
+                    debug("controller already has a socket in this ROOM. denied.");
+                    return {status: "denied", description:"controller already has a socket in this room. denied."};
+                }
+
+                //Cycle throug all rooms this client is in.
+                for (var roomName of cliSoc.rooms){
+                    //ignore rooms named after the client_id. (every client gets a room named after them)
+                    if (cliSoc.id == roomName) continue;
+                    debug("connection in question is in this room:", roomName);//<- room name..
+                    
+                    let room = CD.io.p2pNsp.adapter.rooms.get(roomName);
+                    if (room.size < 2) {
+                        //initially this redirect might seem like a vulnrability but this api can only be called by the app with an api key and a user with permissions.
+                        debug("controller is already waiting for this client in another room. redirecting client to that UUID.");
+                        return {
+                            status:     "redirect", 
+                            description:"controller is already waiting for this client in another room. redirecting client to that UUID.", 
+                            redirect:   roomName
+                        };
+                        
+                    }
+                    debug ('rooms value: %O',room); 
+                }
+            }
+        }
+        return false;
+    }
+
+
+    //Check it controller is connected..
+    self.tools.getControllerSocket = (controller_id)=>{
+        for (let socket of self.controllersNsp.sockets.values()) {
+
+        //self.controllersNsp.sockets.forEach((socket)=>{
+            if (socket.CD.controller_id === controller_id){
+                debug('found connected controller: ',controller_id);
+                return socket;
+            }
+        }
+        //)
+        return false;
+    }
 
 }

@@ -56,7 +56,7 @@
 
         <p>
         <input type="button" id ='upgrade' value="Go Peer 2 Peer"/> <span id='headCount' style="float: right;"> </span><br>
-        <textarea id="textarea" rows="10" cols="50"> </textarea>
+        <textarea id="textarea" rows="50" cols="150"> </textarea>
     </div>
 
 <script src="/socket.io.min.js"></script>
@@ -142,6 +142,7 @@ function startScript(){
     // this event will be triggered over the socket transport
     p2p.on('message', function (data) {
         console.log('message: ', data);
+        if (typeof(data) =="object") data = JSON.stringify(data);
         textArea.value = "peer => " + data+"\n" + textArea.value;
     })
 

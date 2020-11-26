@@ -22,7 +22,8 @@ function checkKey(req, res, next){
     try{
         if ( !req.headers["x-api-key"] ){
             res.send('missing api key');
-            console.log('missing api key')
+            console.log('missing api key');
+            console.log(req.headers);
             return;
         }
         if ( !keys[req.headers["x-api-key"]] ){
