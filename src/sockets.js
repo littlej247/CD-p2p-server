@@ -8,7 +8,10 @@ module.exports = function (expressServer){
 
     var self = this;
     self.pendingConnections = {}
-    self.io = require('socket.io')(expressServer);
+    self.io = require('socket.io')(expressServer,{
+        cors:{
+            origin:"https://ide.cumberlandapartments.ca"
+        }});
     
     /** controllers Namespace
      * this is for socket connecetions between the CD-p2p-server and building controllers,
@@ -30,7 +33,7 @@ module.exports = function (expressServer){
             debug('controller disconnected..');
             debug('rooms after \n%O',self.p2pNsp.adapter.rooms);
             //console.log(self.p2pNsp.adapter.rooms);
-        })        
+        })     
 
         debug('controllersRooms after connect. (should only ever be single rooms \n%O',self.controllersNsp.adapter.rooms);
     })
@@ -38,13 +41,14 @@ module.exports = function (expressServer){
     self.createRoom = (controller_id, people_id, roomName, cb)=>{//roomName is uuid
         debug('incoming request to create p2p room: ',roomName);
 
-        const socket = self.tools.getControllerSocket(controller_id);
+        const socket = tools.getControllerSocket(controller_id);
         if (socket === false){
-            
-            return
+            cb({"status"        :   "controller offline",
+            "description"   :   "Controller connection not found"});
+            return;
         }
         
-        const waiting = self.tools.isControllerWaiting(controller_id, people_id, roomName);
+        const waiting = tools.isControllerWaiting(controller_id, people_id, roomName);
         debug('waiting result', waiting);
         if ( waiting != false){
             debug('controller is waiting..');
@@ -56,8 +60,14 @@ module.exports = function (expressServer){
         //go ahead with new room request..
         debug('emitting connectionRequest for user: ',people_id);
         self.pendingConnections[roomName]={people_id:people_id,controller_id:controller_id};
+        self.pendingConnections[roomName].timeOut = setTimeout(()=>{
+            debug ("pendingConnection expired. \n Removing " + roomName);
+            delete self.pendingConnections[roomName];
+        },120000);
         socket.emit('connectionRequest', roomName, people_id);
-        cb("connection request sent.");
+        cb({"status"        :   "success",
+            "description"   :   "Request successfully send to controller"}
+        );
     
     }
 
@@ -67,13 +77,13 @@ module.exports = function (expressServer){
      *  
      */
     self.p2pNsp = this.io.of('/p2pClients');
-    const p2p = require('socket.io-p2p-server');
+    const p2p = require('./socket-p2p.js');
     self.p2pserver = p2p.Server;
     self.p2pclients = p2p.clients;
 
     self.p2pNsp.on('connection', (socket)=>{
         var debug = require('debug')('CD.io.p2pNsp.soc:'+socket.id.substring(0, 5));
-        if (!socket.CD) socket.CD = {}; //Storage for this program
+        if (!socket.CD) socket.CD = { }; //Storage for this program
 
         //add a one minute timer to kill the connection if not joined/used
         
@@ -85,15 +95,19 @@ module.exports = function (expressServer){
             socket.CD.building_name = id.building_name,
             socket.CD.building_id = id.building_id;
             socket.CD.people_id = id.people_id;
-            socket.CD.controller = id.controller,
+            socket.CD.controller = id.controller;
             
             debug('incomming client id:\n%O',id);
             joinRoom(socket);
         })
 
-        function joinRoom(socket){
+        function joinRoom(socket){      try{
+            
+
+
             //make sure the uuid exists in pendingConnections
             //debug('Checking socket.CD\n%O',socket.CD);
+            /*
             debug('Checking with pendingConnections\n%O',self.pendingConnections);
             if (self.pendingConnections[socket.CD.uuid] == undefined
              || self.pendingConnections[socket.CD.uuid].controller_id != socket.CD.controller_id
@@ -110,7 +124,7 @@ module.exports = function (expressServer){
                     console.log('CONTROLLER attempting to connect with invalid uuid.\n Closing just the p2p socket');};
                 return;
             }            
-
+*/
             const roomName  = socket.CD.uuid;
             debug('attempting to join room: %s', roomName);
 
@@ -159,9 +173,27 @@ module.exports = function (expressServer){
                 self.p2pNsp.adapter.rooms.get(roomName).size
             );
 
+            //When the user disconnects. 
+            //socket.on('disconnecting', function(){
+            
+            socket.on('disconnect', ()=>{
+                if (!self.p2pNsp.adapter.rooms.get(roomName)) return;   // <-- incase this person is the last to leave the room..
+                debug('client disconnecting..');
+                debug('That was in this room: ' + roomName);
+                self.p2pNsp.in(roomName).emit('headCount',
+                    self.p2pNsp.adapter.rooms.get(roomName).size
+                );
+            });
+
+
             debug('p2p rooms after join function \n %O', self.p2pNsp.adapter.rooms);
-            //console.log(self.p2pNsp.adapter.rooms);
-        }        
+
+            /******************************************************************************/
+            /***                        END OF JOIN FUNCTION                            ***/
+            /******************************************************************************/
+        } catch(e){
+            console.error('Something went wrong in the joinRoom function\n',e);
+        }}        
 
         socket.on('error', function (err) {
             debug("Error %s", err);
@@ -172,19 +204,24 @@ module.exports = function (expressServer){
             debug('rooms after disconnect %O', self.p2pNsp.adapter.rooms);
         })
 
+
+
+
         socket.emit('id_request');
 
         socket.on('client_id',id=>{
             socket.CD=id;
         })
 
+
+
         debug('p2p rooms after connect %O',self.p2pNsp.adapter.rooms);
     })
     
-    self.tools = {}
+    const tools = {}
 
     //Search p2pNps for a connection from the controller
-    self.tools.isControllerWaiting = (controller_id, people_id, uuid)=>{
+    tools.isControllerWaiting = (controller_id, people_id, uuid)=>{
         //Is controller already waiting in a room for the client?
         debug('scanning p2p clients...')
         for ( var cliSoc of self.p2pNsp.sockets){
@@ -232,8 +269,47 @@ module.exports = function (expressServer){
     }
 
 
+    //Search p2pNps for a connection from the controller
+    tools.noLoitering = ()=>{
+        const maxChits = 3;
+        //Is controller already waiting in a room for the client?
+        //debug('scanning p2p for loitering...')
+        for ( var cliSoc of self.p2pNsp.sockets){
+            cliSoc = cliSoc[1];
+            //debug('id of connection being examined:', cliSoc.id);
+            
+            if (!cliSoc.CD){ debug("connection missing CD {}");
+                console.error('this should never happen. please investigate noLoitering()');
+                continue;
+            }
+
+            if (cliSoc.CD.noLoiteringChits == undefined) cliSoc.CD.noLoiteringChits = 0;
+
+
+            if ( cliSoc.CD.uuid == undefined  || cliSoc.adapter.rooms.get(cliSoc.CD.uuid) == undefined                    ){
+                cliSoc.CD.noLoiteringChits++;
+                debug('Socket issued noLoiteringChit for being connected without a meeting room.', 'Total: '+cliSoc.CD.noLoiteringChits );
+                if ( cliSoc.CD.noLoiteringChits < 3 ) continue;  //If it has issued a chit and it hasn't hit max, continue so it doesn't issue multiple chits on the same inspection
+            }
+                        
+            let room = CD.io.p2pNsp.adapter.rooms.get(cliSoc.CD.uuid);
+            if (room.size < 2) {
+                cliSoc.CD.noLoiteringChits++;
+                debug('Socket issued noLoiteringChit for being in a meeting room alone.', 'Total: '+cliSoc.CD.noLoiteringChits );
+                if ( cliSoc.CD.noLoiteringChits < 3 ) continue;  //If it has issued a chit and it hasn't hit max, continue so it doesn't issue multiple chits on the same inspection
+            }
+
+            if ( cliSoc.CD.noLoiteringChits >= 3 ){ cliSoc.disconnect();
+                debug('Socket disconnected for exceeding max noLoiteringChits.', 'Total: '+cliSoc.CD.noLoiteringChits );
+                continue;
+            }            
+        }
+    }
+    tools.noLoitering.intervalTimer = setInterval(tools.noLoitering,30000);
+
+
     //Check it controller is connected..
-    self.tools.getControllerSocket = (controller_id)=>{
+    tools.getControllerSocket = (controller_id)=>{
         for (let socket of self.controllersNsp.sockets.values()) {
 
         //self.controllersNsp.sockets.forEach((socket)=>{

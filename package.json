@@ -22,7 +22,6 @@
         "cors": "^2.8.5",
         "express": "~4.17.1",
         "node-turn": "0.0.6",
-        "socket.io": "~3.0.1",
-        "socket.io-p2p-server": "littlej247/socket.io-p2p-server#master"
+        "socket.io": "~3.0.1"
     }
 }
