@@ -53,7 +53,8 @@ function p2pSocket (socket, next, roomName) {
     debug('From: %s', socket.id, " To: %s", toPeerId);
     debug('Signal peer id %s', toPeerId);
     var client = clients[toPeerId];
-    client.emit('peer-signal', data)
+    if (client) client.emit('peer-signal', data); //THIS IS NOT A FIX. SOMETHING BIGGER IS WRONG HERE...
+    
     //client.emit('message', JSON.stringify(data))
   })
   typeof next === 'function' && next()
